@@ -1,0 +1,99 @@
+import pandas as pd
+import xlrd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import argrelextrema
+from openpyxl import load_workbook
+#The user MUST import all these extensions (tutorial will be made)
+
+   
+def rollingAverage(fileName,tabName):
+
+    data = pd.read_excel (fileName,sheet_name=tabName) 
+    columnName = list(data.columns) #a list of the columns name in the file
+    nbColumns=len(data.columns) #number of columns, excluding the Wavelength column
+
+    for colonneCalculee in range(1,nbColumns):
+        data['RA %s'%(columnName[colonneCalculee])]=data[columnName[colonneCalculee]].rolling(window=5, center=True).mean()
+        del data[columnName[colonneCalculee]]
+    return data
+
+def printExcel(fileName,tabName,n,version):
+    df = rollingAverage(fileName,tabName) 
+    columnName = list(df.columns)
+    nbColumns=len(df.columns)
+    for colonneCalculee in range(1,nbColumns):
+        df['min %s'%(columnName[colonneCalculee])] = df.iloc[argrelextrema(df[columnName[colonneCalculee]].values, np.less_equal, order=n)[0]][columnName[colonneCalculee]]
+        df['max %s'%(columnName[colonneCalculee])] = df.iloc[argrelextrema(df[columnName[colonneCalculee]].values, np.greater_equal, order=n)[0]][columnName[colonneCalculee]]
+    df.to_excel(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\exportExcel\export%d.xlsx'%(version)) #DESTINATION OF THE EXCEL FILE HERE
+    return "File created"
+
+def plotRoll(fileName,tabName,xRange): 
+    data = rollingAverage(fileName,tabName)
+    #plotting the graph
+    columnName = list(data.columns)
+    data.plot(x=columnName[0],subplots=True,xlim=xRange)
+    plt.show()
+    return "Plotted"
+
+def drawPeak(fileName,tabName,n,xRange):
+    df = rollingAverage(fileName,tabName)
+    columnName = list(df.columns)
+    nbColumns=len(df.columns)
+    #n is number of points to be checked before and after 
+    #Find local peaks
+    for MZIx in range(1,nbColumns):
+        df['min'] = df.iloc[argrelextrema(df[columnName[MZIx]].values, np.less_equal, order=n)[0]][columnName[MZIx]]
+        df['max'] = df.iloc[argrelextrema(df[columnName[MZIx]].values, np.greater_equal, order=n)[0]][columnName[MZIx]]
+        plt.scatter(df['X'], df['min'], c='r')
+        plt.scatter(df['X'], df['max'], c='g')
+        plt.plot(df['X'], df[columnName[MZIx]])
+        plt.xlim(xRange)
+        plt.show()
+      
+def excelPeakFinal(fileName,tabName,n):
+    df = rollingAverage(fileName,tabName)
+    columnName = list(df.columns)
+    nbColumns=len(df.columns)
+    for MZIx in range(1,nbColumns):
+        df['min %d'%(MZIx)] = df.iloc[argrelextrema(df[columnName[MZIx]].values, np.less_equal, order=n)[0]][columnName[MZIx]]
+        df['max %d'%(MZIx)] = df.iloc[argrelextrema(df[columnName[MZIx]].values, np.greater_equal, order=n)[0]][columnName[MZIx]]
+    for MZIx in range(1,nbColumns):
+        del df[columnName[MZIx]]
+    columnName2 = list(df.columns)
+    del columnName2[0] #Remove the 'X'
+    nbColumns2=len(df.columns)
+
+    #Create excel file to populate
+    writer = pd.ExcelWriter(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\exportExcel\exportClean1.xlsx', engine = 'xlsxwriter')
+    dfempty = pd.DataFrame()
+    dfempty.to_excel(writer)
+    writer.save()
+    writer.close()
+    #
+
+    writer=pd.ExcelWriter(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\exportExcel\exportClean1.xlsx',engine='openpyxl')
+    y=1
+    for x in range(0,nbColumns2-1,2):
+        df2=pd.DataFrame()
+        df2['X']=df['X']
+        df2[columnName2[x]]=df[columnName2[x]]
+        df2 = df2.dropna(how='all',subset=[columnName2[x]])
+        df3=pd.DataFrame()
+        df3['X']=df['X']
+        df3[columnName2[x+1]]=df[columnName2[x+1]]
+        df3 = df3.dropna(how='all',subset=[columnName2[x+1]])
+        df2.to_excel(writer,sheet_name=columnName[y],index=False,startrow=0,startcol=0)
+        df3.to_excel(writer,sheet_name=columnName[y],index=False,startrow=0,startcol=4)
+        writer.save()
+        y+=1
+
+
+
+#excelPeakFinal(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',32)
+
+#print(printExcel(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',100,4))
+#print(plotRoll(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',[1501,1503])) #Range on the x axis can be changed
+#print(drawPeak(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',32,(1500,1616))) #50 IS SWEET SPOT FOR SINUS LOOKING GRAPHS, ELSE GO 1000
+#print(excelPeaks(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',32))
+#excelPeaksClean(r'D:\Users\Marc-AndréLavoie\OneDrive\OneDrive - AEPONYX inc\Bureau\Automatisation\OTV5_R3filters_MSN_TE_die w09 C3L3 _MZI analysis.xlsx','Data 450',32)   
